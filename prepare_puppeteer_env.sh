@@ -56,11 +56,17 @@ chrome_path=$(which "$BROWSER_EXEC")
 # Verify if the browser was installed successfully and move the executable
 if [ -n "$chrome_path" ]; then
     echo "INFO: Browser executable found at: $chrome_path"
-    mv "$chrome_path" .
-    echo "INFO: Moved $(basename "$chrome_path") to current directory."
+    
+    # --- START: MODIFICATION ---
+    # On arm64, rename 'chromium' to 'google-chrome-stable' for compatibility with the JS code.
+    # On amd64, this just moves 'google-chrome-stable' to the current directory.
+    mv "$chrome_path" ./google-chrome-stable
+    echo "INFO: Moved executable to ./google-chrome-stable"
+    # --- END: MODIFICATION ---
+
 else
     echo "ERROR: Browser executable '$BROWSER_EXEC' not found in PATH." >&2
     exit 1
 fi
 
-echo "✅ Setup complete."
+echo "✅ Setup complete. The browser executable is now available at ./google-chrome-stable"
