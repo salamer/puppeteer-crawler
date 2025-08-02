@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -e
 
 # Skip Puppeteer's Chromium download; we'll supply our own browser
 export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
