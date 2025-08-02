@@ -1,29 +1,53 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status
-set -e
+set -euo pipefail
 
-# Install Puppeteer without downloading Chromium (we'll use Google Chrome instead)
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install puppeteer
+# Skip Puppeteer's Chromium download; we'll supply our own browser
+export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Update package list and install required dependencies
-apt-get update \
-    && apt-get install -y wget gnupg \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list' \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*  # Clean up apt cache to save space
+# Install Puppeteer
+npm install puppeteer
 
-# Find the path of google-chrome-stable
-chrome_path=$(which google-chrome-stable || true)
+# Common dependencies (fonts, libxss1, wget/gnupg)
+apt-get update
+apt-get install -y wget gnupg ca-certificates \
+    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 --no-install-recommends
 
-# Verify if Google Chrome was installed successfully
-if [ -n "$chrome_path" ]; then
-    # Move the Chrome executable to the current directory
-    mv "$chrome_path" .
-    echo "google-chrome-stable moved to current directory."
+# Detect architecture
+ARCH=$(uname -m)
+
+chrome_path=""
+
+if [[ "$ARCH" == "x86_64" ]]; then
+    # Install Google Chrome Stable (only available for amd64)
+    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+    sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list'
+    apt-get update
+    apt-get install -y google-chrome-stable --no-install-recommends
+    chrome_path=$(which google-chrome-stable || true)
+elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+    # Official Google Chrome isn't provided for arm64 Linux; fall back to Chromium from distro
+    # Depending on the base image/distribution the package name might be chromium or chromium-browser
+    apt-get install -y chromium-browser || apt-get install -y chromium || true
+    chrome_path=$(which chromium-browser || which chromium || true)
 else
-    echo "Error: google-chrome-stable not found."
+    echo "Unsupported architecture: $ARCH"
     exit 1
 fi
+
+# Clean up apt cache to save space
+rm -rf /var/lib/apt/lists/*
+
+# Verify installation and copy the executable locally
+if [[ -n "$chrome_path" && -x "$chrome_path" ]]; then
+    # Copy instead of move to avoid breaking system-wide usage
+    cp "$chrome_path" .
+    basename=$(basename "$chrome_path")
+    echo "$basename copied to current directory."
+else
+    echo "Error: browser executable not found for architecture $ARCH."
+    exit 1
+fi
+
+# Optional: remind user to set Puppeteer to use this binary, e.g., via PUPPETEER_EXECUTABLE_PATH
+echo "If using Puppeteer, set PUPPETEER_EXECUTABLE_PATH to './$basename' in your launch options."
